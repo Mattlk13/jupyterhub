@@ -77,10 +77,16 @@ class Authenticator(LoggingConfigurable):
         help="""The max age (in seconds) of authentication info
         before forcing a refresh of user auth info.
 
-        Refreshing auth info allows, e.g. requesting/re-validating auth tokens.
+        Authenticators that support it may re-load managed groups,
+        refresh auth tokens, etc., or force a new login if auth info cannot be refreshed.
 
-        See :meth:`.refresh_user` for what happens when user auth info is refreshed
-        (nothing by default).
+        See :meth:`.refresh_user` for what happens when user auth info is refreshed,
+        which varies by authenticator.
+        If an Authenticator does not implement `refresh_user`,
+        auth info will never be considered stale.
+
+        Set `auth_refresh_age = 0` to disable time-based calls to `refresh_user`.
+        You can still use :attr:`refresh_pre_spawn` if `auth_refresh_age` is disabled.
         """,
     )
 
@@ -223,6 +229,7 @@ class Authenticator(LoggingConfigurable):
 
         Authenticator subclasses may override the default with e.g.::
 
+            from traitlets import default
             @default("allow_all")
             def _default_allow_all(self):
                 # if _any_ auth config (depends on the Authenticator)
@@ -1218,7 +1225,7 @@ class LocalAuthenticator(Authenticator):
         cmd = [arg.replace('USERNAME', name) for arg in self.add_user_cmd]
         try:
             uid = self.uids[name]
-            cmd += ['--uid', '%d' % uid]
+            cmd += ['--uid', str(uid)]
         except KeyError:
             self.log.debug(f"No UID for user {name}")
         cmd += [name]

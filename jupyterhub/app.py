@@ -873,13 +873,7 @@ class JupyterHub(Application):
         but your identity provider is likely much more strict,
         allowing you to make assumptions about the name.
 
-        The default behavior is to have all services
-        on a single `services.{domain}` subdomain,
-        and each user on `{username}.{domain}`.
-        This is the 'legacy' scheme,
-        and doesn't work for all usernames.
-
-        The 'idna' scheme is a new scheme that should produce a valid domain name for any user,
+        The 'idna' hook should produce a valid domain name for any user,
         using IDNA encoding for unicode usernames, and a truncate-and-hash approach for
         any usernames that can't be easily encoded into a domain component.
 
@@ -3326,7 +3320,7 @@ class JupyterHub(Application):
         if self.pid_file:
             self.log.debug("Writing PID %i to %s", pid, self.pid_file)
             with open(self.pid_file, 'w') as f:
-                f.write('%i' % pid)
+                f.write(str(pid))
 
     @catch_config_error
     async def initialize(self, *args, **kwargs):
@@ -3640,7 +3634,7 @@ class JupyterHub(Application):
                     if service.managed:
                         status = await service.spawner.poll()
                         if status is not None:
-                            self.log.error(
+                            self.log.critical(
                                 "Service %s exited with status %s",
                                 service_name,
                                 status,
@@ -3649,12 +3643,19 @@ class JupyterHub(Application):
                 else:
                     return True
             else:
-                self.log.error(
-                    "Cannot connect to %s service %s at %s. Is it running?",
-                    service.kind,
-                    service_name,
-                    service.url,
-                )
+                if service.managed:
+                    self.log.critical(
+                        "Cannot connect to %s service %s",
+                        service_name,
+                        service.kind,
+                    )
+                else:
+                    self.log.warning(
+                        "Cannot connect to %s service %s at %s. Is it running?",
+                        service.kind,
+                        service_name,
+                        service.url,
+                    )
                 return False
         return True
 
@@ -3745,18 +3746,8 @@ class JupyterHub(Application):
         # start the service(s)
         for service_name, service in self._service_map.items():
             service_ready = await self.start_service(service_name, service, ssl_context)
-            if not service_ready:
-                if service.from_config:
-                    # Stop the application if a config-based service failed to start.
-                    self.exit(1)
-                else:
-                    # Only warn for database-based service, so that admin can connect
-                    # to hub to remove the service.
-                    self.log.error(
-                        "Failed to reach externally managed service %s",
-                        service_name,
-                        exc_info=True,
-                    )
+            if not service_ready and service.managed:
+                self.exit(1)
 
         await self.proxy.check_routes(self.users, self._service_map)
 

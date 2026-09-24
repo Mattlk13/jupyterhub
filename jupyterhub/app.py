@@ -459,7 +459,9 @@ class JupyterHub(Application):
 
         .. versionadded:: 6.0
         """,
+        config=True,
     )
+
     oauth_token_expires_in = Integer(
         help="""Expiry (in seconds) of OAuth access tokens.
 
